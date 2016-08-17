@@ -140,9 +140,26 @@ pub struct RoomId {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct UserId {
     hostname: Host,
-    localpart: String,
+    localpart: UserLocalpart,
     port: u16,
 }
+
+/// The localpart of a Matrix user ID (no sigil or server name).
+///
+/// A `UserLocalpart` is generated randomly or converted from a string slice, and can be converted
+/// back into a string as needed.
+///
+/// ```
+/// # #![feature(try_from)]
+/// # use std::convert::TryFrom;
+/// # use ruma_identifiers::UserLocalpart;
+/// assert_eq!(
+///     UserLocalpart::try_from("carl").unwrap().to_string(),
+///     "carl"
+/// );
+/// ```
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct UserLocalpart(String);
 
 struct EventIdVisitor;
 struct RoomAliasIdVisitor;
@@ -314,12 +331,13 @@ impl UserId {
     ///
     /// Fails if the given origin server name cannot be parsed as a valid host.
     pub fn new(server_name: &str) -> Result<Self, Error> {
-        let user_id = format!("@{}:{}", generate_localpart(12), server_name);
-        let (localpart, host, port) = parse_id('@', &user_id)?;
+        let localpart = UserLocalpart::new();
+        let user_id = format!("@{}:{}", localpart, server_name);
+        let (_, host, port) = parse_id('@', &user_id)?;
 
         Ok(UserId {
             hostname: host,
-            localpart: localpart.to_string(),
+            localpart: localpart,
             port: port,
         })
     }
@@ -333,13 +351,25 @@ impl UserId {
     }
 
     /// Returns the user's localpart.
-    pub fn localpart(&self) -> &str {
+    pub fn localpart(&self) -> &UserLocalpart {
         &self.localpart
     }
 
     /// Returns the port the originating homeserver can be accessed on.
     pub fn port(&self) -> u16 {
         self.port
+    }
+}
+
+impl UserLocalpart {
+    /// Generates a `UserLocalpart` consisting of 12 random ASCII characters.
+    pub fn new() -> Self {
+        UserLocalpart(generate_localpart(12))
+    }
+
+    /// Returns the localpart as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -369,7 +399,13 @@ impl Display for RoomId {
 
 impl Display for UserId {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        display(f, '@', &self.localpart, &self.hostname, self.port)
+        display(f, '@', &self.localpart.as_str(), &self.hostname, self.port)
+    }
+}
+
+impl Display for UserLocalpart {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -485,15 +521,26 @@ impl<'a> TryFrom<&'a str> for UserId {
     fn try_from(user_id: &'a str) -> Result<UserId, Error> {
         let (localpart, host, port) = parse_id('@', user_id)?;
 
-        if !USER_LOCALPART_PATTERN.is_match(localpart) {
-            return Err(Error::InvalidCharacters);
-        }
+        let user_localpart = UserLocalpart::try_from(localpart)?;
 
         Ok(UserId {
             hostname: host,
             port: port,
-            localpart: localpart.to_owned(),
+            localpart: user_localpart,
         })
+    }
+}
+
+impl<'a> TryFrom<&'a str> for UserLocalpart {
+    type Err = Error;
+
+    /// Attempts to create a new Matrix user ID localpart from a string representation.
+    fn try_from(localpart: &'a str) -> Result<UserLocalpart, Error> {
+        if !USER_LOCALPART_PATTERN.is_match(localpart) {
+            return Err(Error::InvalidCharacters);
+        }
+
+        Ok(UserLocalpart(localpart.to_string()))
     }
 }
 

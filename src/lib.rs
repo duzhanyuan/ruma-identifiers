@@ -158,7 +158,7 @@ pub struct UserId {
 ///     "carl"
 /// );
 /// ```
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct UserLocalpart(String);
 
 struct EventIdVisitor;

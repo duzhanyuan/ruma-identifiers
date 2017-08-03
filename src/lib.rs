@@ -6,8 +6,6 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-#[macro_use]
-extern crate lazy_static;
 extern crate rand;
 extern crate regex;
 extern crate serde;
@@ -43,18 +41,9 @@ const MIN_CHARS: usize = 4;
 /// The number of bytes in a valid sigil.
 const SIGIL_BYTES: usize = 1;
 
-lazy_static! {
-    static ref USER_LOCALPART_PATTERN: Regex =
-        Regex::new(r"\A[a-z0-9._=-]+\z").expect("Failed to create user localpart regex.");
-}
-
 /// An error encountered when trying to parse an invalid ID string.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
-    /// The ID's localpart contains invalid characters.
-    ///
-    /// Only relevant for user IDs.
-    InvalidCharacters,
     /// The domain part of the the ID string is not a valid IP address or DNS name.
     InvalidHost,
     /// The ID exceeds 255 bytes.
@@ -258,7 +247,6 @@ impl Display for Error {
 impl StdError for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::InvalidCharacters => "localpart contains invalid characters",
             Error::InvalidHost => "server name is not a valid IP address or domain name",
             Error::MaximumLengthExceeded => "ID exceeds 255 bytes",
             Error::MinimumLengthNotSatisfied => "ID must be at least 4 characters",
@@ -627,16 +615,11 @@ impl<'a> TryFrom<&'a str> for UserId {
     /// server name.
     fn try_from(user_id: &'a str) -> Result<UserId, Error> {
         let (localpart, host, port) = parse_id('@', user_id)?;
-        let downcased_localpart = localpart.to_lowercase();
-
-        if !USER_LOCALPART_PATTERN.is_match(&downcased_localpart) {
-            return Err(Error::InvalidCharacters);
-        }
 
         Ok(UserId {
             hostname: host,
             port: port,
-            localpart: downcased_localpart.to_owned(),
+            localpart: localpart.to_owned(),
         })
     }
 }
@@ -1153,16 +1136,6 @@ mod tests {
     }
 
     #[test]
-    fn downcase_user_id() {
-        assert_eq!(
-            UserId::try_from("@CARL:example.com")
-                .expect("Failed to create UserId.")
-                .to_string(),
-            "@carl:example.com"
-        );
-    }
-
-    #[test]
     fn generate_random_valid_user_id() {
         let user_id = UserId::new("example.com")
             .expect("Failed to generate UserId.")
@@ -1211,14 +1184,6 @@ mod tests {
                 .expect("Failed to create UserId.")
                 .to_string(),
             "@carl:example.com:5000"
-        );
-    }
-
-    #[test]
-    fn invalid_characters_in_user_id_localpart() {
-        assert_eq!(
-            UserId::try_from("@%%%:example.com").err().unwrap(),
-            Error::InvalidCharacters
         );
     }
 

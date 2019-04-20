@@ -5,10 +5,6 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-#[cfg(feature = "diesel")]
-#[cfg_attr(feature = "diesel", macro_use)]
-extern crate diesel;
-
 use std::{
     convert::TryFrom,
     error::Error as StdError,
@@ -16,7 +12,7 @@ use std::{
 };
 
 #[cfg(feature = "diesel")]
-use diesel::sql_types::Text;
+use diesel::{sql_types::Text, AsExpression, FromSqlRow, QueryId, SqlType};
 
 use lazy_static::lazy_static;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
